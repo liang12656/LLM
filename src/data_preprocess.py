@@ -19,10 +19,25 @@ INVISIBLE_CHAR_PATTERN = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\ufeff\u0
 
 
 def list_csv_files(pattern: str) -> List[Path]:
-    """根据通配符列出所有 CSV 文件路径。"""
-    paths = [Path(p) for p in glob.glob(pattern)]
+    """根据通配符列出所有 CSV 文件路径，兼容不同工作目录。"""
+
+    def _glob(p: str) -> List[Path]:
+        return [Path(found) for found in glob.glob(p)]
+
+    paths = _glob(pattern)
     if not paths:
-        raise FileNotFoundError(f"未找到匹配的 CSV 文件，pattern={pattern}")
+        # 当从 src/ 目录或其它位置运行脚本时，data/... 的相对路径可能失效。
+        project_root = Path(__file__).resolve().parent.parent
+        alt_pattern = str(project_root / Path(pattern))
+        paths = _glob(alt_pattern)
+        if paths:
+            logging.info("未在当前工作目录找到文件，改用项目根路径解析 pattern=%s", alt_pattern)
+
+    if not paths:
+        raise FileNotFoundError(
+            f"未找到匹配的 CSV 文件，pattern={pattern}，"
+            "请确认路径是否相对项目根目录，或尝试使用绝对路径"
+        )
     return sorted(paths)
 
 
